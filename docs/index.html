@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meta Pixel + CAPI Demo</title>
+    <!-- Meta Pixel Code -->
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+
+        fbq('init', '733939589457690');
+        fbq('track', 'PageView');
+    </script>
+    <noscript>
+        <img height="1" width="1" style="display:none"
+             src="https://www.facebook.com/tr?id=733939589457690&ev=PageView&noscript=1"/>
+    </noscript>
+    <!-- End Meta Pixel Code -->
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f0f2f5;
+        }
+        h1 { color: #1877f2; text-align: center; }
+        .subtitle { text-align: center; color: #65676b; margin-bottom: 25px; }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card h2 { margin-top: 0; color: #1c1e21; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0 15px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        input:focus { border-color: #1877f2; outline: none; }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        .btn-primary { background: #1877f2; color: white; }
+        .btn-primary:hover { background: #166fe5; }
+        .btn-success { background: #42b72a; color: white; }
+        .btn-success:hover { background: #36a420; }
+        label { font-weight: 500; color: #333; }
+        .log {
+            margin-top: 20px;
+            background: #1e1e1e;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .log .info { color: #61dafb; }
+        .log .pixel { color: #f1c40f; }
+        .log .success { color: #2ecc71; }
+        .log .error { color: #e74c3c; }
+        .log .debug { color: #9b59b6; }
+        .log .warn { color: #f39c12; }
+        .log .timing { color: #1abc9c; }
+    </style>
+</head>
+<body>
+    <h1>Meta Pixel + CAPI Demo</h1>
+    <p class="subtitle">See how browser Pixel and server-side CAPI work together with deduplication</p>
+
+    <!-- User Data & Events -->
+    <div class="card">
+        <h2>Try It Out</h2>
+        <p style="margin: 0 0 15px 0; font-size: 13px; color: #65676b;">Enter some details and click a button. Both Pixel (browser) and CAPI (server) events fire with the same Event ID for deduplication.</p>
+
+        <label for="name">Full Name</label>
+        <input type="text" id="name" placeholder="Enter your name" value="">
+
+        <label for="email">Email Address</label>
+        <input type="email" id="email" placeholder="Enter your email" value="">
+
+        <label for="phone">Phone Number (optional)</label>
+        <input type="tel" id="phone" placeholder="Enter your phone" value="">
+
+        <button type="button" class="btn-primary" id="cartBtn">Add to Cart</button>
+        <button type="button" class="btn-success" id="wishBtn">Add to Wishlist</button>
+    </div>
+
+    <div class="log" id="log">[Ready] PageView tracked automatically. Click a button to send an event.</div>
+
+    <script>
+        var CAPI_URL = 'https://capi-backend-fdsl.onrender.com/api/event';
+
+        // ============================================================
+        // LOGGING
+        // ============================================================
+        function log(message, type) {
+            var el = document.getElementById('log');
+            var timestamp = new Date().toLocaleTimeString();
+            var className = type || 'info';
+            el.innerHTML += '\n<span class="' + className + '">[' + timestamp + '] ' + message + '</span>';
+            el.scrollTop = el.scrollHeight;
+        }
+
+        // ============================================================
+        // COOKIE HELPER
+        // ============================================================
+        function getCookie(name) {
+            var value = '; ' + document.cookie;
+            var parts = value.split('; ' + name + '=');
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        // ============================================================
+        // SEND CAPI EVENT (PageView on load + button events)
+        // ============================================================
+        async function sendCapiEvent(eventName, eventId, eventData, userData) {
+            var payload = {
+                eventName: eventName,
+                eventId: eventId,
+                eventData: eventData || {},
+                userData: userData || {},
+                eventSourceUrl: window.location.href,
+                clientUserAgent: navigator.userAgent
+            };
+
+            try {
+                var response = await fetch(CAPI_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                var data = await response.json();
+
+                if (data.success) {
+                    log('CAPI OK: ' + eventName + ' sent (events_received=' + (data.result?.events_received || 1) + ')', 'success');
+                    if (data.timing) {
+                        log('  Backend latency: ' + data.timing.totalLatencyMs + 'ms', 'timing');
+                    }
+                } else {
+                    log('CAPI FAILED: ' + JSON.stringify(data.error || data), 'error');
+                }
+            } catch (e) {
+                log('CAPI NETWORK ERROR: ' + e.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // PAGEVIEW CAPI (fires on load alongside Pixel PageView)
+        // ============================================================
+        var pageViewEventId = 'PageView_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+        window.addEventListener('load', function() {
+            log('PageView tracked via Pixel (browser)', 'pixel');
+
+            var fbc = getCookie('_fbc');
+            var fbp = getCookie('_fbp');
+
+            sendCapiEvent('PageView', pageViewEventId, {}, {
+                fbc: fbc,
+                fbp: fbp
+            });
+
+            log('PageView sent via CAPI (server) with Event ID: ' + pageViewEventId, 'info');
+            log('Both channels fired — Facebook will deduplicate using the shared Event ID', 'debug');
+        });
+
+        // ============================================================
+        // BUTTON EVENTS
+        // ============================================================
+        async function sendEvent(eventName) {
+            var nameInput = document.getElementById('name').value;
+            var email = document.getElementById('email').value;
+            var phone = document.getElementById('phone').value;
+
+            if (!nameInput || !email) {
+                alert('Please enter your name and email.');
+                return;
+            }
+
+            var names = nameInput.trim().split(' ');
+            var firstName = names[0] || '';
+            var lastName = names.slice(1).join(' ') || '';
+
+            var eventId = eventName + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+            var eventData = {
+                content_name: 'Test Product',
+                content_ids: ['PROD-1234'],
+                content_type: 'product',
+                value: 49.99,
+                currency: 'USD'
+            };
+
+            var fbc = getCookie('_fbc');
+            var fbp = getCookie('_fbp');
+
+            log('----------------------------------------', 'info');
+            log('EVENT: ' + eventName, 'info');
+            log('Event ID: ' + eventId, 'debug');
+
+            // Step 1: Pixel (browser)
+            if (typeof fbq !== 'undefined') {
+                fbq('track', eventName, eventData, { eventID: eventId });
+                log('PIXEL OK: ' + eventName + ' sent', 'pixel');
+            } else {
+                log('PIXEL: fbq not loaded', 'error');
+            }
+
+            // Step 2: CAPI (server)
+            await sendCapiEvent(eventName, eventId, eventData, {
+                email: email,
+                phone: phone,
+                firstName: firstName,
+                lastName: lastName,
+                fbc: fbc,
+                fbp: fbp
+            });
+
+            log('Both channels fired with same Event ID for deduplication', 'success');
+            log('----------------------------------------', 'info');
+        }
+
+        document.getElementById('cartBtn').addEventListener('click', function() {
+            sendEvent('AddToCart');
+        });
+        document.getElementById('wishBtn').addEventListener('click', function() {
+            sendEvent('AddToWishlist');
+        });
+    </script>
+</body>
+</html>
